@@ -47,7 +47,7 @@ Scarica `SimpleTVHome-<versione>.apk` dalla sezione **Releases** di questo repos
 
 ```sh
 adb connect 192.168.1.20:5555        # l'IP della tua TV
-adb install -r SimpleTVHome-0.1.apk
+adb install -r SimpleTVHome-0.2.apk
 ```
 
 Alla prima connessione la TV chiede di autorizzare il computer: scegli *Consenti sempre*.

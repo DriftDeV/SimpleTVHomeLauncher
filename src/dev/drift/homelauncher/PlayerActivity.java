@@ -82,6 +82,8 @@ public class PlayerActivity extends Activity implements SurfaceHolder.Callback {
         jelly = new Jelly(this);
         movie.id = getIntent().getStringExtra("id");
         movie.name = String.valueOf(getIntent().getStringExtra("title"));
+        String src = getIntent().getStringExtra("source");
+        movie.mediaSourceId = src == null || src.isEmpty() ? movie.id : src;
         setTitle(movie.name);
         startTicks = getIntent().getLongExtra("start", 0);
         runtimeTicks = getIntent().getLongExtra("runtime", 0);
@@ -218,8 +220,7 @@ public class PlayerActivity extends Activity implements SurfaceHolder.Callback {
     // ------------------------------------------------------------ riproduzione
 
     private long ticks() {
-        long pos = mp != null && prepared ? mp.getCurrentPosition() * 10000L : 0;
-        return (info == null ? 0 : info.baseTicks) + pos;
+        return mp != null && prepared ? mp.getCurrentPosition() * 10000L : 0;
     }
 
     private void start() {
@@ -236,10 +237,11 @@ public class PlayerActivity extends Activity implements SurfaceHolder.Callback {
         audioIdx = audio;
         subIdx = sub;
         final long pos = from;
-        jelly.playbackInfo(movie.id, pos, audio, sub, forceTranscode, new Jelly.Done<Jelly.PlayInfo>() {
+        jelly.playbackInfo(movie.id, movie.mediaSourceId, pos, audio, sub, forceTranscode, new Jelly.Done<Jelly.PlayInfo>() {
             @Override
             public void ok(Jelly.PlayInfo pi) {
                 info = pi;
+                if (!pi.mediaSourceId.isEmpty()) movie.mediaSourceId = pi.mediaSourceId;
                 if (audioIdx < 0) audioIdx = pi.audioIdx;
                 prepare(pos);
             }
@@ -261,9 +263,15 @@ public class PlayerActivity extends Activity implements SurfaceHolder.Callback {
             mp.setOnPreparedListener(m -> {
                 prepared = true;
                 message.setVisibility(View.GONE);
-                // direct play: salta alla posizione; transcodifica: il flusso parte gia' da li'
-                if (info.direct && from > 0) m.seekTo((int) (from / 10000L));
+                // direct play: il file arriva intero e il server ignora la traccia scelta, la sceglie il player
+                if (info.direct && !selectAudio(audioIdx)) {
+                    forceTranscode = true;
+                    load(from, audioIdx, subIdx);
+                    return;
+                }
+                // sia il file sia la playlist HLS partono da 0:00: si salta alla posizione, dopo start (prima HLS lo ignora)
                 m.start();
+                if (from > 0) m.seekTo((int) (from / 10000L));
                 jelly.reportStart(movie, info, from);
                 h.removeCallbacks(progressReport);
                 h.postDelayed(progressReport, 10000);
@@ -349,14 +357,7 @@ public class PlayerActivity extends Activity implements SurfaceHolder.Callback {
         if (!prepared) return;
         long target = Math.max(0, ticks() + deltaTicks);
         if (runtimeTicks > 0) target = Math.min(target, runtimeTicks - 5 * 10000000L);
-        if (info.direct) {
-            mp.seekTo((int) (target / 10000L));
-        } else if (target >= info.baseTicks) {
-            mp.seekTo((int) ((target - info.baseTicks) / 10000L)); // dentro cio' che il server ha gia' preparato
-        } else {
-            load(target, audioIdx, subIdx);
-            return;
-        }
+        mp.seekTo((int) (target / 10000L));
         update();
     }
 
@@ -369,7 +370,7 @@ public class PlayerActivity extends Activity implements SurfaceHolder.Callback {
     private void update() {
         if (!prepared) return;
         long t = ticks();
-        long total = runtimeTicks > 0 ? runtimeTicks : (info.baseTicks + mp.getDuration() * 10000L);
+        long total = runtimeTicks > 0 ? runtimeTicks : mp.getDuration() * 10000L;
         progress.set(total > 0 ? t / (float) total : 0f, A11y.spokenTime(this, t / 10000000L),
                 total > 0 ? A11y.spokenTime(this, total / 10000000L) : "");
         tCur.setText(clock(t));
@@ -397,7 +398,37 @@ public class PlayerActivity extends Activity implements SurfaceHolder.Callback {
 
     private void switchTracks(int a, int s) {
         if (a == audioIdx && s == subIdx) return;
+        // direct play e cambia solo l'audio: lo cambia il player al volo, senza ricaricare
+        if (info.direct && prepared && s == subIdx && selectAudio(a)) {
+            audioIdx = a;
+            return;
+        }
         load(ticks(), a, s);
+    }
+
+    /**
+     * Seleziona nel player la traccia audio con l'indice Jellyfin dato: la n-esima traccia audio del server
+     * e' la n-esima del file. Se il player non sa cambiare traccia va bene solo la prima (quella che suona gia').
+     */
+    private boolean selectAudio(int jfIndex) {
+        int k = 0;
+        for (Movie.Stream s : info.streams) {
+            if (!s.type.equals("Audio") || s.external) continue;
+            if (s.index == jfIndex) break;
+            k++;
+        }
+        try {
+            MediaPlayer.TrackInfo[] ts = mp.getTrackInfo();
+            for (int i = 0, n = k; i < ts.length; i++) {
+                if (ts[i].getTrackType() != MediaPlayer.TrackInfo.MEDIA_TRACK_TYPE_AUDIO) continue;
+                if (n-- == 0) {
+                    mp.selectTrack(i);
+                    return true;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return k == 0 || jfIndex < 0;
     }
 
     // ------------------------------------------------------------ tasti

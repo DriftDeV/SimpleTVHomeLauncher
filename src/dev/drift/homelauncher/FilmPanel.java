@@ -895,7 +895,9 @@ final class FilmPanel extends FrameLayout {
         sels.setOrientation(LinearLayout.HORIZONTAL);
         sels.setClipChildren(false);
         if (au.size() > 1) {
-            final Pill ap = new Pill(act, "Audio: " + trackName(au.get(0)), u);
+            Movie.Stream a0 = au.get(0);
+            for (Movie.Stream st : au) if (st.isDefault) { a0 = st; break; } // quella che il server sceglie se non si tocca nulla
+            final Pill ap = new Pill(act, "Audio: " + trackName(a0), u);
             ap.setOnClickListener(v -> {
                 MenuDialog md = menu("Audio", m.name);
                 for (final Movie.Stream st : au) {
@@ -1021,6 +1023,7 @@ final class FilmPanel extends FrameLayout {
     private void play(Movie m, long startTicks, int audio, int sub) {
         Intent i = new Intent(act, PlayerActivity.class);
         i.putExtra("id", m.id);
+        i.putExtra("source", m.mediaSourceId);
         i.putExtra("title", m.name);
         i.putExtra("start", startTicks);
         i.putExtra("runtime", m.runtimeTicks);

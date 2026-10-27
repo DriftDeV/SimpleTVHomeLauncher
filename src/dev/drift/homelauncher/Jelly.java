@@ -329,8 +329,7 @@ final class Jelly {
     /** Risposta di PlaybackInfo: URL da riprodurre e tracce disponibili. */
     static final class PlayInfo {
         String url = "", mediaSourceId = "", playSessionId = "";
-        boolean direct;
-        long baseTicks; // la transcodifica parte dall'istante richiesto: la posizione reale e' base + posizione del player
+        boolean direct; // in entrambi i casi il flusso parte da 0:00 (la playlist HLS copre tutto il film): il player cerca la posizione
         List<Movie.Stream> streams = new ArrayList<>();
         int audioIdx = -1, subIdx = -1;
     }
@@ -361,9 +360,12 @@ final class Jelly {
         return p;
     }
 
-    /** startTicks: da dove far partire; audioIdx/subIdx: tracce scelte (-1 = predefinite / nessuna); force: solo transcodifica. */
-    void playbackInfo(final String id, final long startTicks, final int audioIdx, final int subIdx, final boolean force,
-                      Done<PlayInfo> cb) {
+    /**
+     * sourceId: la versione del film (il server applica le tracce scelte solo se c'e'); startTicks: da dove far partire;
+     * audioIdx: traccia audio (-1 = predefinita); subIdx: sottotitolo (-1 = nessuno); force: solo transcodifica.
+     */
+    void playbackInfo(final String id, final String sourceId, final long startTicks, final int audioIdx, final int subIdx,
+                      final boolean force, Done<PlayInfo> cb) {
         async(() -> {
             JSONObject b = new JSONObject();
             b.put("UserId", userId);
@@ -376,8 +378,9 @@ final class Jelly {
             b.put("EnableTranscoding", true);
             b.put("AllowVideoStreamCopy", !force);
             b.put("AllowAudioStreamCopy", !force);
+            b.put("MediaSourceId", sourceId);
             if (audioIdx >= 0) b.put("AudioStreamIndex", audioIdx);
-            if (subIdx >= 0) b.put("SubtitleStreamIndex", subIdx);
+            b.put("SubtitleStreamIndex", subIdx); // -1 esplicito, se no il server imprime il sottotitolo predefinito
             JSONObject r = new JSONObject(request("POST", "/Items/" + id + "/PlaybackInfo?userId=" + userId, b.toString(), true));
             JSONArray ms = r.getJSONArray("MediaSources");
             if (ms.length() == 0) throw new IllegalStateException("Nessuna sorgente multimediale");
@@ -396,7 +399,6 @@ final class Jelly {
                         + "&deviceId=" + deviceId + "&PlaySessionId=" + pi.playSessionId + "&api_key=" + token;
             } else if (!tu.isEmpty()) {
                 pi.url = (tu.startsWith("http") ? tu : server + tu) + (tu.contains("api_key=") ? "" : (tu.contains("?") ? "&" : "?") + "api_key=" + token);
-                pi.baseTicks = startTicks;
             } else {
                 throw new IllegalStateException("Il server non puo' riprodurre questo file");
             }
