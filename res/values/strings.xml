@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Testi per l'accessibilita' (lettore di schermo): descrizioni, stati e annunci. -->
+<resources>
+    <string name="app_name">Home</string>
+
+    <!-- barra superiore -->
+    <string name="a11y_clock">Ore %1$s</string>
+    <string name="a11y_date">Data: %1$s</string>
+    <string name="a11y_profile">Profilo %1$s</string>
+    <string name="a11y_inputs">Sorgenti video</string>
+    <string name="a11y_network">Rete</string>
+    <string name="a11y_settings">Impostazioni</string>
+
+    <!-- controlli di riproduzione -->
+    <string name="a11y_prev_track">Brano precedente</string>
+    <string name="a11y_next_track">Brano successivo</string>
+    <string name="a11y_rewind">Indietro di 10 secondi</string>
+    <string name="a11y_forward">Avanti di 10 secondi</string>
+    <string name="a11y_play">Riproduci</string>
+    <string name="a11y_pause">Pausa</string>
+    <string name="a11y_progress">Avanzamento</string>
+    <string name="a11y_progress_value">Avanzamento: %1$s di %2$s</string>
+    <string name="a11y_progress_percent">Avanzamento: %1$d per cento</string>
+    <string name="a11y_seek_back">Indietro di %1$d secondi</string>
+    <string name="a11y_seek_forward">Avanti di %1$d secondi</string>
+    <string name="a11y_state_playing">In riproduzione</string>
+    <string name="a11y_state_paused">In pausa</string>
+    <string name="a11y_now_playing">In riproduzione: %1$s, %2$s</string>
+    <string name="a11y_cover">Copertina di %1$s</string>
+
+    <!-- libreria film -->
+    <string name="a11y_film_year">%1$d</string>
+    <string name="a11y_film_watched">visto</string>
+    <string name="a11y_film_in_progress">in corso al %1$d per cento</string>
+    <string name="a11y_rating">valutazione %1$s su 10</string>
+    <string name="a11y_film_opened">Scheda di %1$s</string>
+    <string name="a11y_position">%1$d di %2$d</string>
+    <string name="a11y_formats">Formato: %1$s</string>
+    <string name="a11y_film_details">Scheda: %1$s</string>
+    <string name="a11y_film_details_closed">Scheda chiusa</string>
+
+    <!-- accesso Jellyfin -->
+    <string name="a11y_octet3">Terzo numero dell\'indirizzo</string>
+    <string name="a11y_octet4">Ultimo numero dell\'indirizzo</string>
+    <string name="a11y_octet_value">%1$s: %2$d. Su e giù lo cambiano</string>
+    <string name="a11y_code">Codice %1$s</string>
+    <string name="a11y_code_announce">Codice di accesso: %1$s. Inseriscilo in Jellyfin, Quick Connect.</string>
+
+    <!-- avatar -->
+    <string name="a11y_avatar">Avatar %1$s</string>
+    <string name="a11y_avatar_current">%1$s, attuale</string>
+    <string name="avatar_0">Stella</string>
+    <string name="avatar_1">Luna</string>
+    <string name="avatar_2">Fulmine</string>
+    <string name="avatar_3">Cuore</string>
+    <string name="avatar_4">Pianeta</string>
+    <string name="avatar_5">Montagne</string>
+    <string name="avatar_6">Onda</string>
+    <string name="avatar_7">Fiamma</string>
+    <string name="avatar_8">Foglia</string>
+    <string name="avatar_9">Nota musicale</string>
+    <string name="avatar_10">Controller</string>
+    <string name="avatar_11">Sorriso</string>
+
+    <!-- stati nei menu -->
+    <string name="a11y_selected">%1$s, selezionato</string>
+
+    <plurals name="a11y_seconds">
+        <item quantity="one">%1$d secondo</item>
+        <item quantity="other">%1$d secondi</item>
+    </plurals>
+    <plurals name="a11y_minutes">
+        <item quantity="one">%1$d minuto</item>
+        <item quantity="other">%1$d minuti</item>
+    </plurals>
+    <plurals name="a11y_hours">
+        <item quantity="one">%1$d ora</item>
+        <item quantity="other">%1$d ore</item>
+    </plurals>
+</resources>

@@ -1,0 +1,28 @@
+# build (si rigenera con ./build.sh)
+build/
+*.apk
+*.dex
+*.idsig
+*.class
+
+# chiave di firma di debug: build.sh la rigenera se manca
+*.keystore
+*.jks
+
+# uscite dei test: screenshot e dump di accessibilita' possono contenere dati dell'account
+shots/
+a11y_out/
+*.png
+!docs/screenshots/*.png
+*.log
+
+# python
+__pycache__/
+
+# IDE
+.idea/
+*.iml
+
+# sistema
+.DS_Store
+Thumbs.db
