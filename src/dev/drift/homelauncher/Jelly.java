@@ -324,6 +324,107 @@ final class Jelly {
         return poster(m, w);
     }
 
+    // ------------------------------------------------------------ musica
+
+    private static final String MFIELDS = "&Fields=ChildCount&EnableTotalRecordCount=false";
+
+    private List<MusicItem> music(String query) throws Exception {
+        return MusicItem.list(request("GET", "/Items?userId=" + userId + "&Recursive=true" + query + MFIELDS, null, true));
+    }
+
+    /** Brani ascoltati di recente, dal piu' recente. */
+    void recentSongs(Done<List<MusicItem>> cb) {
+        async(() -> music("&IncludeItemTypes=Audio&Filters=IsPlayed&SortBy=DatePlayed&SortOrder=Descending&Limit=20"), cb);
+    }
+
+    void albums(Done<List<MusicItem>> cb) {
+        async(() -> music("&IncludeItemTypes=MusicAlbum&SortBy=SortName"), cb);
+    }
+
+    /** Artisti degli album (non ogni ospite citato nei brani). */
+    void artists(Done<List<MusicItem>> cb) {
+        async(() -> {
+            List<MusicItem> l = MusicItem.list(request("GET", "/Artists/AlbumArtists?userId=" + userId
+                    + "&SortBy=SortName" + MFIELDS, null, true));
+            for (MusicItem m : l) m.kind = MusicItem.ARTIST;
+            return l;
+        }, cb);
+    }
+
+    /** n brani a caso (li sceglie il server). */
+    void randomSongs(final int n, Done<List<MusicItem>> cb) {
+        async(() -> music("&IncludeItemTypes=Audio&SortBy=Random&Limit=" + n), cb);
+    }
+
+    /** Brani dati per id, nell'ordine degli id (quelli spariti dal server mancano). */
+    void songsById(final List<String> ids, Done<List<MusicItem>> cb) {
+        async(() -> {
+            StringBuilder sb = new StringBuilder();
+            for (String id : ids) sb.append(sb.length() > 0 ? "," : "").append(id);
+            List<MusicItem> got = music("&Ids=" + sb);
+            List<MusicItem> out = new ArrayList<>();
+            for (String id : ids) for (MusicItem m : got) if (m.id.equals(id)) out.add(m);
+            return out;
+        }, cb);
+    }
+
+    void albumTracks(final String albumId, Done<List<MusicItem>> cb) {
+        async(() -> music("&ParentId=" + albumId + "&IncludeItemTypes=Audio&SortBy=ParentIndexNumber,IndexNumber,SortName"), cb);
+    }
+
+    void artistAlbums(final String artistId, Done<List<MusicItem>> cb) {
+        async(() -> music("&IncludeItemTypes=MusicAlbum&AlbumArtistIds=" + artistId + "&SortBy=ProductionYear,SortName"), cb);
+    }
+
+    /** Tutti i brani di un artista, album per album (per "Riproduci" e "Casuale" nella sua scheda). */
+    void artistSongs(final String artistId, Done<List<MusicItem>> cb) {
+        async(() -> music("&IncludeItemTypes=Audio&AlbumArtistIds=" + artistId
+                + "&SortBy=ProductionYear,Album,ParentIndexNumber,IndexNumber"), cb);
+    }
+
+    /** Copertina: quella del brano, se no quella del suo album; null se non ce n'e'. */
+    String cover(MusicItem m, int w) {
+        if (!m.imgTag.isEmpty()) return imageUrl(m.id, "Primary", m.imgTag, w);
+        if (!m.albumImgTag.isEmpty() && !m.albumId.isEmpty()) return imageUrl(m.albumId, "Primary", m.albumImgTag, w);
+        return null;
+    }
+
+    /**
+     * Flusso audio: il server manda il file cosi' com'e' se il formato va bene, se no lo converte in mp3.
+     * La chiave va come ApiKey: le versioni recenti rifiutano api_key su questo indirizzo.
+     */
+    String audioUrl(String id) {
+        // bitrate massimo alto: in rete locale anche il FLAC arriva originale, senza passare per l'MP3.
+        // m4a solo con AAC (%7C = "|", contenitore|codec): l'ALAC lo converte il server
+        return server + "/Audio/" + id + "/universal?UserId=" + userId + "&DeviceId=" + deviceId
+                + "&MaxStreamingBitrate=140000000&Container=" + MusicItem.DIRECT.replace("m4a", "m4a%7Caac")
+                + "&TranscodingContainer=mp3&TranscodingProtocol=http&AudioCodec=mp3&ApiKey=" + token;
+    }
+
+    /** Il brano completo (formato, qualita', genere, ascolti) per la scheda "Informazioni". */
+    void songDetail(final MusicItem m, Done<MusicItem> cb) {
+        async(() -> {
+            m.detail(new JSONObject(request("GET", "/Items/" + m.id + "?userId=" + userId, null, true)));
+            return m;
+        }, cb);
+    }
+
+    /** Stato della riproduzione di un brano: tiene aggiornati "ascoltati di recente" e il conteggio sul server. */
+    void reportAudio(final String what, final String id, final long ms, final boolean paused) {
+        POOL.execute(() -> {
+            try {
+                JSONObject b = new JSONObject();
+                b.put("ItemId", id);
+                b.put("PositionTicks", ms * 10000L);
+                b.put("IsPaused", paused);
+                b.put("CanSeek", true);
+                b.put("PlayMethod", "DirectStream");
+                request("POST", "/Sessions/Playing" + what, b.toString(), true);
+            } catch (Throwable ignored) {
+            }
+        });
+    }
+
     // ------------------------------------------------------------ riproduzione
 
     /** Risposta di PlaybackInfo: URL da riprodurre e tracce disponibili. */

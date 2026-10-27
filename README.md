@@ -21,7 +21,7 @@ Niente account da creare, niente tracciamento: le uniche connessioni di rete son
 
 ![Inserimento semplice dell'indirizzo](docs/screenshots/06-login-simple.png)
 
-**Musica.** Mostra il brano in riproduzione da qualsiasi app che lo comunica ad Android (per esempio Spotify), con copertina e controlli. Richiede l'accesso alle notifiche (vedi sotto).
+**Musica.** La libreria musicale del tuo server Jellyfin (lo stesso accesso della sezione Film) in righe: **Brani del giorno** (sei brani scelti a caso, gli stessi per tutta la giornata), **Ascoltati di recente**, **Album** e **Artisti**. Album e artisti aprono una scheda con l'elenco dei brani, *Riproduci* e *Casuale*. I brani suonano nel launcher: in alto trovi copertina, controlli, formato e qualità (per esempio `FLAC · 16 bit · 44,1 kHz`); il pulsante *i* apre tutte le informazioni sul brano (bitrate, frequenza, canali, dimensione, se il server lo sta convertendo, genere, ascolti). I tasti multimediali del telecomando funzionano anche fuori dal launcher. Se suona un'altra app che lo comunica ad Android (per esempio Spotify), in alto vedi quella; per questo serve l'accesso alle notifiche (vedi sotto).
 
 ![Musica](docs/screenshots/05-music.png)
 
@@ -31,7 +31,7 @@ Niente account da creare, niente tracciamento: le uniche connessioni di rete son
 
 - Una TV (o box) con **Android 7.0 o successivo**. Provato su un televisore Android 9 e sugli emulatori Android TV.
 - Un computer con [`adb`](https://developer.android.com/tools/adb) (parte delle *platform-tools* di Android) sulla stessa rete della TV.
-- Per la sezione Film, un server Jellyfin raggiungibile dalla TV (porta `8096`).
+- Per le sezioni Film e Musica, un server Jellyfin raggiungibile dalla TV (porta `8096`).
 
 ## Installare la release
 
@@ -47,7 +47,7 @@ Scarica `SimpleTVHome-<versione>.apk` dalla sezione **Releases** di questo repos
 
 ```sh
 adb connect 192.168.1.20:5555        # l'IP della tua TV
-adb install -r SimpleTVHome-0.2.apk
+adb install -r SimpleTVHome-0.3.apk
 ```
 
 Alla prima connessione la TV chiede di autorizzare il computer: scegli *Consenti sempre*.
@@ -59,11 +59,11 @@ Per aggiornare, ripeti `adb install -r` con il nuovo file. L'APK deve essere fir
 ```sh
 # nome e account del profilo
 adb shell pm grant dev.drift.homelauncher android.permission.GET_ACCOUNTS
-# sezione Musica: brano in riproduzione
+# sezione Musica: brano in riproduzione nelle altre app (Spotify...)
 adb shell cmd notification allow_listener dev.drift.homelauncher/dev.drift.homelauncher.MediaListener
 ```
 
-Senza questi due comandi tutto il resto funziona: il profilo si chiama "Utente" e la sezione Musica ti chiede il permesso.
+Senza questi due comandi tutto il resto funziona: il profilo si chiama "Utente" e la sezione Musica mostra solo la tua libreria Jellyfin (e ti chiede il permesso per vedere le altre app).
 
 ## Usarlo al posto della Home di fabbrica
 

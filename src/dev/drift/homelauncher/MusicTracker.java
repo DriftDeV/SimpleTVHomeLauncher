@@ -93,7 +93,10 @@ final class MusicTracker {
     }
 
     synchronized void start() {
-        if (!hasAccess()) return;
+        if (!hasAccess()) {
+            requery(); // senza permesso si vede comunque il player interno (Jellyfin)
+            return;
+        }
         try {
             msm = (MediaSessionManager) ctx.getSystemService(Context.MEDIA_SESSION_SERVICE);
             ComponentName cn = new ComponentName(ctx, MediaListener.class);
@@ -104,40 +107,78 @@ final class MusicTracker {
             pick(msm.getActiveSessions(cn));
         } catch (SecurityException e) {
             started = false;
+            requery();
         }
+    }
+
+    /** Il player interno ha cambiato brano o stato: puo' cambiare quale sessione mostrare. */
+    void localChanged() {
+        requery();
     }
 
     private void requery() {
+        List<MediaController> list = null;
         try {
-            if (msm != null) pick(msm.getActiveSessions(new ComponentName(ctx, MediaListener.class)));
+            if (msm != null && hasAccess()) list = msm.getActiveSessions(new ComponentName(ctx, MediaListener.class));
         } catch (SecurityException ignored) {
         }
+        pick(list);
     }
 
-    private void pick(List<MediaController> list) {
+    private static boolean isPlaying(MediaController c) {
+        PlaybackState s = c.getPlaybackState();
+        return s != null && (s.getState() == PlaybackState.STATE_PLAYING || s.getState() == PlaybackState.STATE_BUFFERING);
+    }
+
+    /**
+     * Quale sessione mostrare: il player interno se suona, poi un'altra app che suona (Spotify per prima),
+     * poi il player interno in pausa, poi Spotify, poi la prima che c'e'.
+     */
+    private void pick(List<MediaController> all) {
+        MusicPlayer lp = MusicPlayer.peek();
+        MediaController local = lp != null && lp.hasTrack() ? lp.controller() : null;
+        List<MediaController> list = new java.util.ArrayList<>();
+        if (all != null) for (MediaController c : all) if (!c.getPackageName().equals(ctx.getPackageName())) list.add(c);
         MediaController best = null;
-        if (list != null) {
+        if (local != null && lp.active()) best = local;
+        if (best == null) {
+            for (MediaController c : list) {
+                if (c.getPackageName().startsWith("com.spotify") && isPlaying(c)) {
+                    best = c;
+                    break;
+                }
+            }
+        }
+        if (best == null) {
+            for (MediaController c : list) {
+                if (isPlaying(c)) {
+                    best = c;
+                    break;
+                }
+            }
+        }
+        if (best == null) best = local;
+        if (best == null) {
             for (MediaController c : list) {
                 if (c.getPackageName().startsWith("com.spotify")) {
                     best = c;
                     break;
                 }
             }
-            if (best == null) {
-                for (MediaController c : list) {
-                    PlaybackState s = c.getPlaybackState();
-                    if (s != null && s.getState() == PlaybackState.STATE_PLAYING) {
-                        best = c;
-                        break;
-                    }
-                }
-            }
-            if (best == null && !list.isEmpty()) best = list.get(0);
         }
-        if (ctrl != null) ctrl.unregisterCallback(callback);
+        if (best == null && !list.isEmpty()) best = list.get(0);
+        if (ctrl != null && (best == null || !best.getSessionToken().equals(ctrl.getSessionToken()))) {
+            ctrl.unregisterCallback(callback);
+        }
+        boolean same = ctrl != null && best != null && best.getSessionToken().equals(ctrl.getSessionToken());
         ctrl = best;
-        if (ctrl != null) ctrl.registerCallback(callback, h);
+        if (ctrl != null && !same) ctrl.registerCallback(callback, h);
         refresh();
+    }
+
+    /** True se la sessione mostrata e' quella del player interno. */
+    boolean isLocal() {
+        return ctrl != null && ctrl.getPackageName().equals(ctx.getPackageName());
     }
 
     private static String s(MediaMetadata m, String... keys) {

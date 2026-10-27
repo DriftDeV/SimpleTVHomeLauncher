@@ -39,6 +39,13 @@
     <string name="a11y_film_details">Scheda: %1$s</string>
     <string name="a11y_film_details_closed">Scheda chiusa</string>
 
+    <!-- libreria musica -->
+    <string name="a11y_album">Album %1$s</string>
+    <string name="a11y_artist">Artista %1$s</string>
+    <string name="a11y_track">Traccia %1$d, %2$s</string>
+    <string name="a11y_album_opened">Album %1$s, %2$s</string>
+    <string name="a11y_artist_opened">Artista %1$s</string>
+    <string name="a11y_track_info">Informazioni sul brano</string>
     <!-- accesso Jellyfin -->
     <string name="a11y_octet3">Terzo numero dell\'indirizzo</string>
     <string name="a11y_octet4">Ultimo numero dell\'indirizzo</string>

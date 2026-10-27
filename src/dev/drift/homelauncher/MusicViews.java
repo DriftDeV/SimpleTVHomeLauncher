@@ -19,16 +19,24 @@ final class MusicViews {
     private MusicViews() {
     }
 
-    /** Copertina arrotondata (centercrop); senza immagine mostra un gradiente con una nota. */
+    /** Copertina arrotondata (centercrop); senza immagine mostra un gradiente con una nota (o le iniziali). */
     static final class Cover extends View {
-        private final float radius;
+        private float radius;
         private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
         private Bitmap bmp;
+        private String initials;
 
         Cover(Context c, float radius) {
             super(c);
             this.radius = radius;
             setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        }
+
+        /** Tonda (artisti) e, senza foto, con le iniziali del nome al posto della nota. */
+        void setPerson(String name) {
+            radius = -1;
+            initials = name;
+            invalidate();
         }
 
         /** Descrizione della copertina; null la rende decorativa (il lettore di schermo la salta). */
@@ -44,7 +52,32 @@ final class MusicViews {
 
         @Override
         protected void onDraw(Canvas canvas) {
-            draw(canvas, bmp, getWidth(), getHeight(), radius, p);
+            int w = getWidth(), h = getHeight();
+            if (initials != null && bmp == null) person(canvas, initials, w, h, p);
+            else draw(canvas, bmp, w, h, radius < 0 ? Math.min(w, h) / 2f : radius, p);
+        }
+
+        /** Cerchio con le iniziali su un colore ricavato dal nome: lo stesso artista ha sempre lo stesso colore. */
+        static void person(Canvas canvas, String name, int w, int h, Paint p) {
+            float hue = (name.hashCode() & 0x7fffffff) % 360;
+            int c1 = android.graphics.Color.HSVToColor(new float[]{hue, 0.55f, 0.62f});
+            int c2 = android.graphics.Color.HSVToColor(new float[]{(hue + 40) % 360, 0.65f, 0.30f});
+            p.setShader(new LinearGradient(0, 0, w, h, c1, c2, Shader.TileMode.CLAMP));
+            float r = Math.min(w, h) / 2f;
+            canvas.drawCircle(w / 2f, h / 2f, r, p);
+            p.setShader(null);
+            StringBuilder ini = new StringBuilder();
+            for (String part : name.trim().split("\\s+")) {
+                if (!part.isEmpty() && ini.length() < 2) ini.appendCodePoint(Character.toUpperCase(part.codePointAt(0)));
+            }
+            p.setColor(0xF2FFFFFF);
+            p.setTextAlign(Paint.Align.CENTER);
+            p.setTypeface(Typeface.create("sans-serif-light", Typeface.NORMAL));
+            p.setTextSize(r * 0.78f);
+            Paint.FontMetrics fm = p.getFontMetrics();
+            canvas.drawText(ini.toString(), w / 2f, h / 2f - (fm.ascent + fm.descent) / 2f, p);
+            p.setTextAlign(Paint.Align.LEFT);
+            p.setColor(0xFF000000);
         }
 
         static void draw(Canvas canvas, Bitmap bmp, int w, int h, float radius, Paint p) {
@@ -101,6 +134,7 @@ final class MusicViews {
                 public void onInitializeAccessibilityNodeInfo(View host, android.view.accessibility.AccessibilityNodeInfo info) {
                     super.onInitializeAccessibilityNodeInfo(host, info);
                     info.setClassName("android.widget.SeekBar");
+                    info.setContentDescription(spoken());
                     info.setRangeInfo(android.view.accessibility.AccessibilityNodeInfo.RangeInfo.obtain(
                             android.view.accessibility.AccessibilityNodeInfo.RangeInfo.RANGE_TYPE_PERCENT, 0, 100, frac * 100));
                     if (seeker != null) {
@@ -130,14 +164,26 @@ final class MusicViews {
             seeker = s;
         }
 
-        /** Valore parlato: "Avanzamento: 13 secondi di 29 secondi" (o la percentuale se la durata non si conosce). */
+        private String cur = "", total = "";
+
+        /**
+         * Valore parlato: "Avanzamento: 13 secondi di 29 secondi" (o la percentuale se la durata non si conosce).
+         * Calcolato solo quando il lettore di schermo lo chiede: cambiare la descrizione a ogni scatto manderebbe
+         * un evento di accessibilita' ogni mezzo secondo (TalkBack rallenta e l'interfaccia non e' mai "ferma").
+         */
         void set(float f, String spokenCur, String spokenTotal) {
-            frac = Math.max(0f, Math.min(1f, f));
-            Context c = getContext();
-            setContentDescription(spokenTotal == null || spokenTotal.isEmpty()
-                    ? c.getString(R.string.a11y_progress_percent, Math.round(frac * 100))
-                    : c.getString(R.string.a11y_progress_value, spokenCur, spokenTotal));
+            float nf = Math.max(0f, Math.min(1f, f));
+            cur = spokenCur == null ? "" : spokenCur;
+            total = spokenTotal == null ? "" : spokenTotal;
+            if (getWidth() > 0 && Math.abs(nf - frac) * getWidth() < 0.5f) return; // a schermo non cambia nulla
+            frac = nf;
             invalidate();
+        }
+
+        private String spoken() {
+            Context c = getContext();
+            return total.isEmpty() ? c.getString(R.string.a11y_progress_percent, Math.round(frac * 100))
+                    : c.getString(R.string.a11y_progress_value, cur, total);
         }
 
         @Override
@@ -215,7 +261,7 @@ final class MusicViews {
         }
     }
 
-    /** Pulsante tondo di controllo: 0 indietro, 1 play/pausa, 2 avanti. */
+    /** Pulsante tondo di controllo: 0 indietro, 1 play/pausa, 2 avanti, 3/4 -10 s/+10 s, 5 informazioni. */
     static final class Ctl extends View {
         final int type;
         private boolean playing;
@@ -233,6 +279,7 @@ final class MusicViews {
         private void describe() {
             int id = type == 0 ? R.string.a11y_prev_track : type == 2 ? R.string.a11y_next_track
                     : type == 3 ? R.string.a11y_rewind : type == 4 ? R.string.a11y_forward
+                    : type == 5 ? R.string.a11y_track_info
                     : playing ? R.string.a11y_pause : R.string.a11y_play;
             setContentDescription(getContext().getString(id));
         }
@@ -268,7 +315,11 @@ final class MusicViews {
             canvas.save();
             canvas.translate(w / 2f, h / 2f);
             Path p = new Path();
-            if (type == 1) {
+            if (type == 5) {
+                // "i": puntino e asta arrotondata
+                canvas.drawCircle(0, -u * 0.85f, u * 0.2f, g);
+                canvas.drawRoundRect(-u * 0.16f, -u * 0.4f, u * 0.16f, u * 1.0f, u * 0.16f, u * 0.16f, g);
+            } else if (type == 1) {
                 if (playing) {
                     canvas.drawRoundRect(-u * 0.95f, -u, -u * 0.25f, u, u * 0.2f, u * 0.2f, g);
                     canvas.drawRoundRect(u * 0.25f, -u, u * 0.95f, u, u * 0.2f, u * 0.2f, g);
@@ -302,6 +353,239 @@ final class MusicViews {
                 canvas.drawPath(p, g);
             }
             canvas.restore();
+        }
+    }
+
+    /** Tre barrette: il brano che sta suonando (disegnate, niente glifi di testo). */
+    static void eq(Canvas canvas, float cx, float cy, float s, Paint p) {
+        float bw = s * 0.22f, gap = s * 0.17f, r = bw / 2f;
+        float[] hs = {0.55f, 1f, 0.75f};
+        float x = cx - (3 * bw + 2 * gap) / 2f;
+        for (float hh : hs) {
+            float top = cy + s / 2f - s * hh;
+            canvas.drawRoundRect(x, top, x + bw, cy + s / 2f, r, r, p);
+            x += bw + gap;
+        }
+    }
+
+    /**
+     * Riquadro della libreria musicale: copertina quadrata (o tonda per gli artisti) con titolo e sottotitolo sotto.
+     * L'immagine si carica solo quando il riquadro e' vicino allo schermo e si libera quando si allontana,
+     * cosi' una libreria grande non riempie la memoria della TV.
+     */
+    static final class Tile extends View {
+        final MusicItem item;
+        private final int size;
+        private final float u;
+        private final boolean round;
+        private final String url;
+        private Bitmap img;
+        private boolean wanted, loading, current;
+        private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+        private final Paint ring = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final android.text.TextPaint tTitle = new android.text.TextPaint(Paint.ANTI_ALIAS_FLAG);
+        private final android.text.TextPaint tSub = new android.text.TextPaint(Paint.ANTI_ALIAS_FLAG);
+        private final String sub;
+
+        Tile(Context c, MusicItem item, String sub, String url, int size, float u) {
+            super(c);
+            this.item = item;
+            this.sub = sub == null ? "" : sub;
+            this.url = url;
+            this.size = size;
+            this.u = u;
+            this.round = item.kind == MusicItem.ARTIST;
+            float ts = A11y.textScale(c);
+            tTitle.setColor(0xF2FFFFFF);
+            tTitle.setTextSize(17 * u * ts);
+            tTitle.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+            tSub.setColor(0xB3FFFFFF);
+            tSub.setTextSize(15 * u * ts);
+            tSub.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
+            if (round) {
+                tTitle.setTextAlign(Paint.Align.CENTER);
+                tSub.setTextAlign(Paint.Align.CENTER);
+            }
+            ring.setStyle(Paint.Style.STROKE);
+            ring.setStrokeWidth(Math.max(2f, 3 * u));
+            ring.setColor(0xFFFFFFFF);
+            setFocusable(true);
+            setClickable(true);
+            setPivotX(size / 2f);
+            setPivotY(size / 2f); // cresce attorno alla copertina, il testo scende appena
+        }
+
+        /** Altezza totale: copertina + due righe di testo. */
+        static int height(int size, float u, Context c) {
+            return size + Math.round((12 + 44 * A11y.textScale(c)) * u);
+        }
+
+        @Override
+        protected void onMeasure(int a, int b) {
+            setMeasuredDimension(size, height(size, u, getContext()));
+        }
+
+        /** Vicino alla parte visibile: carica la copertina; lontano: la lascia andare. */
+        void near(boolean on) {
+            wanted = on;
+            if (!on) {
+                if (img != null) {
+                    img = null;
+                    invalidate();
+                }
+                return;
+            }
+            if (img != null || loading || url == null) return;
+            loading = true;
+            Img.load(url, b -> {
+                loading = false;
+                if (wanted && b != null) {
+                    img = b;
+                    invalidate();
+                }
+            });
+        }
+
+        Bitmap image() {
+            return img;
+        }
+
+        /** Il brano di questo riquadro e' quello che suona. */
+        void setCurrent(boolean c) {
+            if (current == c) return;
+            current = c;
+            invalidate();
+        }
+
+        @Override
+        protected void onFocusChanged(boolean gained, int direction, Rect previouslyFocused) {
+            super.onFocusChanged(gained, direction, previouslyFocused);
+            animate().cancel();
+            animate().scaleX(gained ? 1.08f : 1f).scaleY(gained ? 1.08f : 1f).setDuration(140).start();
+            invalidate();
+        }
+
+        @Override
+        protected void drawableStateChanged() {
+            super.drawableStateChanged();
+            invalidate();
+        }
+
+        @Override
+        protected void onDraw(Canvas canvas) {
+            float rad = round ? size / 2f : 10 * u;
+            if (round && img == null) Cover.person(canvas, item.name, size, size, p);
+            else Cover.draw(canvas, img, size, size, rad, p);
+            if (current) {
+                float r = 17 * u, cx = size - 10 * u - r, cy = size - 10 * u - r;
+                p.setColor(0xD9000000);
+                canvas.drawCircle(cx, cy, r, p);
+                p.setColor(0xFFFFFFFF);
+                eq(canvas, cx, cy, 15 * u, p);
+            }
+            if (isPressed()) {
+                p.setColor(0x55000000);
+                canvas.drawRoundRect(0, 0, size, size, rad, rad, p);
+            }
+            if (isFocused()) {
+                float i = ring.getStrokeWidth() / 2f;
+                canvas.drawRoundRect(i, i, size - i, size - i, rad, rad, ring);
+            }
+            p.setColor(0xFF000000);
+            // testo: una riga ciascuno, tagliato con i puntini
+            float x = round ? size / 2f : 0;
+            Paint.FontMetrics fm = tTitle.getFontMetrics();
+            float y = size + 12 * u - fm.ascent;
+            canvas.drawText(TextUtils.ellipsize(item.name, tTitle, size, TextUtils.TruncateAt.END).toString(), x, y, tTitle);
+            if (!sub.isEmpty()) {
+                y += fm.descent - tSub.getFontMetrics().ascent + 3 * u;
+                canvas.drawText(TextUtils.ellipsize(sub, tSub, size, TextUtils.TruncateAt.END).toString(), x, y, tSub);
+            }
+        }
+    }
+
+    /** Riga di una traccia nella scheda album: numero (o le barrette se suona), titolo, durata. Piena al focus. */
+    static final class TrackRow extends View {
+        final MusicItem item;
+        private final float u;
+        private final String num, dur, extra;
+        private boolean current;
+        private final Paint bg = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final android.text.TextPaint tNum = new android.text.TextPaint(Paint.ANTI_ALIAS_FLAG);
+        private final android.text.TextPaint tTitle = new android.text.TextPaint(Paint.ANTI_ALIAS_FLAG);
+
+        /** extra: l'artista, solo se diverso da quello dell'album (compilation, ospiti). */
+        TrackRow(Context c, MusicItem item, int number, String extra, float u) {
+            super(c);
+            this.item = item;
+            this.u = u;
+            this.num = String.valueOf(number);
+            this.dur = MusicItem.clock(item.durationMs());
+            this.extra = extra == null ? "" : extra;
+            float ts = A11y.textScale(c);
+            tNum.setTextSize(18 * u * ts);
+            tNum.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
+            tTitle.setTextSize(20 * u * ts);
+            tTitle.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
+            setFocusable(true);
+            setClickable(true);
+        }
+
+        void setCurrent(boolean c) {
+            if (current == c) return;
+            current = c;
+            invalidate();
+        }
+
+        boolean isCurrent() {
+            return current;
+        }
+
+        @Override
+        protected void onFocusChanged(boolean gained, int direction, Rect previouslyFocused) {
+            super.onFocusChanged(gained, direction, previouslyFocused);
+            invalidate();
+        }
+
+        @Override
+        protected void drawableStateChanged() {
+            super.drawableStateChanged();
+            invalidate();
+        }
+
+        @Override
+        protected void onDraw(Canvas canvas) {
+            int w = getWidth(), h = getHeight();
+            boolean f = isFocused();
+            if (f || isPressed()) {
+                bg.setColor(isPressed() ? 0xCCFFFFFF : 0xF2FFFFFF);
+                canvas.drawRoundRect(0, 0, w, h, 12 * u, 12 * u, bg);
+            }
+            int main = f ? 0xFF111111 : 0xFFFFFFFF, soft = f ? 0xA6111111 : 0x99FFFFFF;
+            float cy = h / 2f;
+            if (current) {
+                bg.setColor(main);
+                eq(canvas, 36 * u, cy, 16 * u, bg);
+            } else {
+                tNum.setColor(soft);
+                tNum.setTextAlign(Paint.Align.CENTER);
+                canvas.drawText(num, 36 * u, cy - (tNum.descent() + tNum.ascent()) / 2f, tNum);
+            }
+            tNum.setTextAlign(Paint.Align.RIGHT);
+            tNum.setColor(soft);
+            float durW = dur.isEmpty() ? 0 : tNum.measureText(dur);
+            canvas.drawText(dur, w - 22 * u, cy - (tNum.descent() + tNum.ascent()) / 2f, tNum);
+            float x = 72 * u, room = w - x - durW - 48 * u;
+            tTitle.setColor(main);
+            String t = TextUtils.ellipsize(item.name, tTitle, room, TextUtils.TruncateAt.END).toString();
+            float ty = cy - (tTitle.descent() + tTitle.ascent()) / 2f;
+            canvas.drawText(t, x, ty, tTitle);
+            float used = tTitle.measureText(t);
+            if (!extra.isEmpty() && used + 40 * u < room) {
+                tTitle.setColor(soft);
+                String e = TextUtils.ellipsize("  ·  " + extra, tTitle, room - used, TextUtils.TruncateAt.END).toString();
+                canvas.drawText(e, x + used, ty, tTitle);
+            }
         }
     }
 }

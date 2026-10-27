@@ -184,6 +184,7 @@ public class HomeActivity extends Activity {
         bg = new BgView(this);
         root.addView(bg, new FrameLayout.LayoutParams(-1, -1));
         musicPanel = new MusicPanel(this, u);
+        musicPanel.setOnNeedLogin(() -> setTab(TAB_FILM)); // l'accesso a Jellyfin si fa nella tab Film
         musicPanel.setVisibility(View.GONE);
         filmPanel = new FilmPanel(this, u);
         filmPanel.setVisibility(View.GONE);
@@ -913,9 +914,24 @@ public class HomeActivity extends Activity {
         }
     }
 
+    private View confirmDownOn;
+
     /** SU dalla riga preferiti: vai al pulsante in alto piu' vicino in orizzontale (non a caso). */
     @Override
     public boolean dispatchKeyEvent(KeyEvent e) {
+        // OK premuto su una tab che sposta subito il focus nel contenuto: su alcune versioni di Android il rilascio
+        // arriva al nuovo elemento e lo "clicca" (si apriva "Collega Jellyfin" o la tastiera). Il rilascio vale solo
+        // per l'elemento su cui il tasto e' stato premuto.
+        int k = e.getKeyCode();
+        if (k == KeyEvent.KEYCODE_DPAD_CENTER || k == KeyEvent.KEYCODE_ENTER || k == KeyEvent.KEYCODE_NUMPAD_ENTER) {
+            if (e.getAction() == KeyEvent.ACTION_DOWN && e.getRepeatCount() == 0) {
+                confirmDownOn = getCurrentFocus();
+            } else if (e.getAction() == KeyEvent.ACTION_UP) {
+                View down = confirmDownOn;
+                confirmDownOn = null;
+                if (down != null && getCurrentFocus() != down) return true;
+            }
+        }
         if (e.getAction() == KeyEvent.ACTION_DOWN && e.getKeyCode() == KeyEvent.KEYCODE_DPAD_UP) {
             View f = getCurrentFocus();
             if (f instanceof Card && (f.getParent() == listFav
@@ -962,6 +978,7 @@ public class HomeActivity extends Activity {
     @Override
     public void onBackPressed() {
         if (tab == TAB_FILM && filmPanel.onBack()) return;
+        if (tab == TAB_MUSIC && musicPanel.onBack()) return;
         if (tab != TAB_HOME) {
             setTab(TAB_HOME);
             return;
